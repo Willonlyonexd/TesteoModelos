@@ -1,7 +1,12 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 import json
 import logging
+import threading
+import time
+from datetime import datetime
+import os
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Configuración de logging
 logging.basicConfig(
@@ -11,6 +16,73 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Variable para rastrear el estado del servicio
+service_status = {
+    "last_health_check": None,
+    "uptime_start": datetime.now().isoformat(),
+    "health_checks_count": 0
+}
+
+# Ruta de estado para health checks
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Endpoint ligero para verificar si el servicio está activo"""
+    service_status["last_health_check"] = datetime.now().isoformat()
+    service_status["health_checks_count"] += 1
+    
+    return jsonify({
+        "status": "ok",
+        "current_time": datetime.now().isoformat(),
+        "uptime_since": service_status["uptime_start"],
+        "checks_count": service_status["health_checks_count"]
+    })
+
+# Función para mantener el servicio activo con auto-pings
+def keep_alive():
+    """Realiza ping al propio endpoint health para mantener el servicio activo"""
+    try:
+        # Obtener la URL base del entorno o usar localhost para desarrollo
+        base_url = os.environ.get('RENDER_EXTERNAL_URL', 'http://localhost:5000')
+        health_url = f"{base_url}/health"
+        
+        logger.info(f"Auto-ping a {health_url}")
+        response = requests.get(health_url, timeout=10)
+        
+        if response.status_code == 200:
+            logger.info(f"Auto-ping exitoso: {response.status_code}")
+        else:
+            logger.warning(f"Auto-ping con respuesta inesperada: {response.status_code}")
+            
+    except Exception as e:
+        logger.error(f"Error en auto-ping: {str(e)}")
+
+# Configurar el programador para el auto-ping
+scheduler = BackgroundScheduler()
+scheduler.add_job(keep_alive, 'interval', minutes=5, id='keep_alive_job')
+scheduler.start()
+
+# Asegurar que el scheduler se apague correctamente al final
+import atexit
+atexit.register(lambda: scheduler.shutdown())
+
+# Ruta para mostrar información sobre el estado del servicio
+@app.route('/', methods=['GET'])
+def index():
+    current_time = datetime.now().isoformat()
+    current_user = "muimui69"  # Obtenido de los datos proporcionados
+    
+    return jsonify({
+        "service": "Cliente Consolidado API",
+        "status": "running",
+        "current_time": current_time,
+        "current_user": current_user,
+        "health_info": service_status,
+        "available_endpoints": [
+            "/health - Verificar estado del servicio",
+            "/api/clientes/consolidado - Obtener datos consolidados de clientes"
+        ]
+    })
 
 @app.route('/api/clientes/consolidado', methods=['GET'])
 def get_clientes_consolidado():
@@ -262,4 +334,5 @@ def get_clientes_consolidado():
 
 if __name__ == '__main__':
     logger.info("Iniciando aplicación Flask")
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
