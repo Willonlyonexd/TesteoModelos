@@ -59,7 +59,7 @@ def keep_alive():
 
 # Configurar el programador para el auto-ping
 scheduler = BackgroundScheduler()
-scheduler.add_job(keep_alive, 'interval', minutes=5, id='keep_alive_job')
+scheduler.add_job(keep_alive, 'interval', minutes=13, id='keep_alive_job')
 scheduler.start()
 
 # Asegurar que el scheduler se apague correctamente al final
