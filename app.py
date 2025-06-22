@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS  # <-- IMPORTANTE: importar CORS
 import requests
 import json
 import logging
@@ -16,6 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)  # <-- Habilita CORS para todos los orígenes
 
 # Cargar URL base desde variable de entorno
 BASE_URL = os.environ.get('API_BASE_URL', 'https://hammerhead-app-4vfrt.ondigitalocean.app')
@@ -31,7 +33,7 @@ service_status = {
 def health_check():
     service_status["last_health_check"] = datetime.now().isoformat()
     service_status["health_checks_count"] += 1
-    
+
     return jsonify({
         "status": "ok",
         "current_time": datetime.now().isoformat(),
